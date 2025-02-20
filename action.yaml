@@ -5,6 +5,10 @@ author: 'Kristain S.S'
 runs:
   using: "composite"
   steps:
+    - name: Setup YQ
+      uses: mikefarah/yq@v4
+    - name: Setup Flux CLI
+      uses: fluxcd/flux2/action@main
     - name: Set GitHub Path
       run: echo "$GITHUB_ACTION_PATH" >> $GITHUB_PATH
       shell: bash
