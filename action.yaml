@@ -11,5 +11,6 @@ runs:
       env:
         GITHUB_ACTION_PATH: ${{ github.action_path }}
     - name: Run flux-diff.sh
-      run: ./flux-diff.sh
-      shell: bash
+      run: ${{ github.action_path }}/flux-diff.sh
+      - name: Checkout
+        uses: actions/checkout@v2
