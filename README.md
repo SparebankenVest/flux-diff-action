@@ -3,8 +3,8 @@
 This GitHub Action compares the current state of your Kubernetes cluster with the desired state defined in your Git repository using Flux.
 
 ## Pre-requisite:
-- yq
-- flux
+- Kubeconfig
+- Runner needs access to the cluster that the flux diff is performed against.
 
 ## Usage
 
@@ -24,24 +24,26 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-
+        with:
+          fetch-depth: 0
+      - uses: azure/k8s-set-context@v4
+        with:
+          method: kubeconfig
+          kubeconfig: <your kubeconfig>
+          context: <context name>
       - name: Run Flux Diff
         uses: your-username/flux-diff-action@v1
-        with:
-          kubeconfig: ${{ secrets.KUBECONFIG }}
-          git-repo-url: ${{ secrets.GIT_REPO_URL }}
 ```
 
 ## Inputs
 
-- `kubeconfig`: The kubeconfig file to access your Kubernetes cluster.
-- `git-repo-url`: The URL of your Git repository containing the desired state.
+None
 
 ## Outputs
 
-This action does not produce any outputs.
+None
 
-## Example
+## Example (AZURE OIDC)
 
 Here is an example of how to use this action in a workflow:
 
@@ -59,12 +61,17 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - uses: azure/aks-set-context@v4
+        with:
+          resource-group: '<resource group name>'
+          cluster-name: '<cluster name>'
       - name: Run Flux Diff
         uses: your-username/flux-diff-action@v1
-        with:
-          kubeconfig: ${{ secrets.KUBECONFIG }}
-          git-repo-url: ${{ secrets.GIT_REPO_URL }}
 ```
 
 ## License
