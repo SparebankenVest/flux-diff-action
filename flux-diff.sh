@@ -41,11 +41,11 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     if ! [[ "$TENANT" == null ]] ; then
       flux diff kustomization $TENANT --path $dir -n $NAMESPACE
       if [ $? -eq 0 ]; then
-        tput setaf 10; printf '\xE2\x9C\x93' # Green checkmark
-        tput sgr0; printf ' No changes'
+        printf '\xE2\x9C\x93' # Checkmark
+        printf ' No changes'
       elif [ $? -gt 1 ]; then
-        tput setaf 1; printf '\xe2\x9c\x97' # Red cross
-        tput sgr0; printf ' An error occurred'
+        printf '\xe2\x9c\x97' # Cross
+        printf ' An error occurred'
         # Clean up and exit
         rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt
         exit 1
