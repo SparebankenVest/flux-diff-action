@@ -9,12 +9,7 @@ runs:
     #   uses: mikefarah/yq@v4
     - name: Setup YQ
       run: |
-        # DOWNLOAD YQ
-        echo "Downloading yq"
-        curl -sL https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64 -o yq
-
-        cp ./yq $GITHUB_WORKSPACE/bin
-        chmod +x $GITHUB_WORKSPACE/bin/yq
+        wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && chmod +x /usr/bin/yq
       shell: bash
     - name: Setup Flux CLI
       uses: fluxcd/flux2/action@main
