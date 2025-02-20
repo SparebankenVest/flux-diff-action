@@ -2,9 +2,10 @@
 
 This GitHub Action compares the current state of your Kubernetes cluster with the desired state defined in your Git repository using Flux.
 
-## Pre-requisite:
+## Pre-requisite/Assumptions:
 - Kubeconfig
 - Runner needs access to the cluster that the flux diff is performed against.
+- Github flow branching strategy. Aka the Flux diff is done against the main branch in the git repo (`main`).
 
 ## Usage
 
@@ -25,7 +26,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # fetch all commits and branches. Needed in order to diff against `main` branch.
       - uses: azure/k8s-set-context@v4
         with:
           method: kubeconfig
