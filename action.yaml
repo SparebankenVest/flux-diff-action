@@ -5,13 +5,6 @@ author: 'Kristain S.S'
 runs:
   using: "composite"
   steps:
-    # - name: Setup YQ
-    #   uses: mikefarah/yq@v4
-    - name: Setup YQ
-      run: |
-        curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/bin/yq -v
-        chmod +x /usr/bin/yq
-      shell: bash
     - name: Setup Flux CLI
       uses: fluxcd/flux2/action@main
     - name: Set GitHub Path
