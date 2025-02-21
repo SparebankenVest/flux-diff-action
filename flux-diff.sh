@@ -48,7 +48,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     if ! [[ "$TENANT" == null ]] ; then
       flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt
       if [ $? -eq 0 ]; then
-        printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir | tee -a diff-output.txt
+        printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir
       elif [ $? -eq 1 ]; then
         printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' $dir | tee -a diff-output.txt
         cat tmp-flux-diff.txt | tee -a diff-output.txt
