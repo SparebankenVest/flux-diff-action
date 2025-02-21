@@ -47,15 +47,14 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     printf "\n---------- Flux diffing $dir----------\n"
 
     if ! [[ "$TENANT" == null ]] ; then
-      flux diff kustomization $TENANT --path $dir -n $NAMESPACE > tmp-flux-diff.txt
+      flux diff kustomization $TENANT --path $dir --progress-bar false -n $NAMESPACE > tmp-flux-diff.txt
       if [ $? -eq 0 ]; then
-        
-        printf -- '---\xE2\x9C\x93 No changes in %s---' $dir | tee -a diff-output.txt
+        printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir | tee -a diff-output.txt
       elif [ $? -eq 1 ]; then
-        printf -- '---\xE2\x9C\x93 Changes detected in %s---' $dir | tee -a diff-output.txt
+        printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' $dir | tee -a diff-output.txt
         cat tmp-flux-diff.txt >> diff-output.txt
       elif [ $? -gt 1 ]; then
-        printf -- '---\xe2\x9c\x97 An error occurred in %s---' $dir | tee -a diff-output.txt
+        printf -- '\n---\xe2\x9c\x97 An error occurred in %s---\n' $dir | tee -a diff-output.txt
         # Clean up and exit
         rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt
         exit 1
