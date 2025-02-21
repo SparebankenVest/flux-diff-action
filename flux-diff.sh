@@ -16,7 +16,7 @@ do
   # Check if kustomization.yaml exists in directory and if directory is not already in tmp-changed-kustomization-dirs.txt
   if [ -f "$dir/kustomization.yaml" ] && ! grep -Fxq "$dir" tmp-changed-kustomization-dirs.txt; then
     # Add directory to tmp-changed-kustomization-dirs.txt
-    printf $dir >> tmp-changed-kustomization-dirs.txt
+    echo $dir >> tmp-changed-kustomization-dirs.txt
   fi
 done < tmp-changed-dirs.txt
 
@@ -48,12 +48,12 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     if ! [[ "$TENANT" == null ]] ; then
       flux diff kustomization $TENANT --path $dir -n $NAMESPACE > tmp-flux-diff.txt
       if [ $? -eq 0 ]; then
-        printf '---\xE2\x9C\x93 No changes in %s---' $dir >> diff-output.txt
+        printf '---\xE2\x9C\x93 No changes in %s---' $dir | tee -a diff-output.txt
       elif [ $? -eq 1 ]; then
-        printf '---\xE2\x9C\x93 Changes detected in %s---' $dir >> diff-output.txt
+        printf '---\xE2\x9C\x93 Changes detected in %s---' $dir | tee -a diff-output.txt
         cat tmp-flux-diff.txt >> diff-output.txt
       elif [ $? -gt 1 ]; then
-        printf '---\xe2\x9c\x97 An error occurred in %s---' $dir >> diff-output.txt
+        printf '---\xe2\x9c\x97 An error occurred in %s---' $dir | tee -a diff-output.txt
         # Clean up and exit
         rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt
         exit 1
