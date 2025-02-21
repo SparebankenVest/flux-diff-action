@@ -1,7 +1,7 @@
 ---
 name: 'Flux diff'
 description: 'Run flux diff to see what changes would be applied to the cluster'
-author: 'Kristain S.S'
+author: 'SPV'
 outputs:
   diff-output:
     description: "Flux diff output"

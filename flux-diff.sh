@@ -59,5 +59,10 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
   done < tmp-changed-kustomization-dirs.txt
 fi
 
+# Check if diff-output.txt is empty and add "No changes" if it is
+if [ ! -s diff-output.txt ]; then
+  echo "No changes" >> diff-output.txt
+fi
+
 # Clean up
 rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt

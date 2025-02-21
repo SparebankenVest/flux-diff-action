@@ -76,7 +76,7 @@ jobs:
           cluster-name: '<azure-cluster-name>'
           use-kubelogin: true
       - name: Flux diff
-        uses: SparebankenVest/flux-diff-action@latest
+        uses: SparebankenVest/flux-diff-action@0.1.1
         id: flux-diff
       - name: Show flux diff in PR
         if: github.event_name == 'pull_request'
