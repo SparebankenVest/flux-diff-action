@@ -1,8 +1,3 @@
-## Pre-requisite:
-# - yq
-# - flux
-
-#
 # Find all changed files compared to main branch
 
 git diff origin/main --name-only > tmp-changed-files.txt
