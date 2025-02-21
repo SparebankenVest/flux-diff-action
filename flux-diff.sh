@@ -16,16 +16,18 @@ do
   # Check if kustomization.yaml exists in directory and if directory is not already in tmp-changed-kustomization-dirs.txt
   if [ -f "$dir/kustomization.yaml" ] && ! grep -Fxq "$dir" tmp-changed-kustomization-dirs.txt; then
     # Add directory to tmp-changed-kustomization-dirs.txt
-    echo $dir >> tmp-changed-kustomization-dirs.txt
+    printf $dir >> tmp-changed-kustomization-dirs.txt
   fi
 done < tmp-changed-dirs.txt
 
 
 if [ -s tmp-changed-kustomization-dirs.txt ]; then
   # Print all changed kustomization directories
-  echo "\n----------Folders to flux diff:----------\n"
+  printf "\n----------Folders to flux diff:----------\n"
   cat tmp-changed-kustomization-dirs.txt
 
+  # Create output file.
+  touch diff-output.txt
   # Loop over all lines in tmp-changed-kustomization-dirs and do diff against cluster
   while read dir;
   do
@@ -35,19 +37,25 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     TENANT=$(yq 'head_comment' "$dir/kustomization.yaml" | grep flux-tenant-name | yq '.flux-tenant-name')
     NAMESPACE=$(yq 'head_comment' "$dir/kustomization.yaml" | grep flux-tenant-ns | yq '.flux-tenant-ns')
 
+    if [ -z "$TENANT" ] || [ -z "$NAMESPACE" ]; then
+      printf "\nNo 'flux-tenant-name' and/or 'flux-tenant-ns' comment found in $dir/kustomization.yaml. Skipping diff.\n"
+      continue
+    fi
+
     # Check if kustomization file has tenant header comment. If not, skip
-    echo "\n---------- Flux diffing $dir----------\n"
+    printf "\n---------- Flux diffing $dir----------\n"
 
     if ! [[ "$TENANT" == null ]] ; then
-      flux diff kustomization $TENANT --path $dir -n $NAMESPACE
+      flux diff kustomization $TENANT --path $dir -n $NAMESPACE > tmp-flux-diff.txt
       if [ $? -eq 0 ]; then
-        printf '\xE2\x9C\x93' # Checkmark
-        printf ' No changes'
+        printf '---\xE2\x9C\x93 No changes in %s---' $dir >> diff-output.txt
+      elif [ $? -eq 1 ]; then
+        printf '---\xE2\x9C\x93 Changes detected in %s---' $dir >> diff-output.txt
+        cat tmp-flux-diff.txt >> diff-output.txt
       elif [ $? -gt 1 ]; then
-        printf '\xe2\x9c\x97' # Cross
-        printf ' An error occurred'
+        printf '---\xe2\x9c\x97 An error occurred in %s---' $dir >> diff-output.txt
         # Clean up and exit
-        rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt
+        rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt
         exit 1
       fi
       continue
@@ -57,4 +65,4 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
 fi
 
 # Clean up
-rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt
+rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt
