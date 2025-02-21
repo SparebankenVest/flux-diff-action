@@ -38,8 +38,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     NAMESPACE=$(yq 'head_comment' "$dir/kustomization.yaml" | grep flux-tenant-ns | yq '.flux-tenant-ns')
 
     if [ "$TENANT" == null ] || [ "$NAMESPACE" == null ]; then
-      printf "\nNo 'flux-tenant-name' and/or 'flux-tenant-ns' comment found in $dir/kustomization.yaml. Skipping diff.\n"
-
+      printf "\nNo 'flux-tenant-name' and/or 'flux-tenant-ns' comment found in $dir/kustomization.yaml. Skipping diff.\n" | tee -a diff-output.txt
       continue
     fi
 
