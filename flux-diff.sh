@@ -51,7 +51,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
         printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir | tee -a diff-output.txt
       elif [ $? -eq 1 ]; then
         printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' $dir | tee -a diff-output.txt
-        cat tmp-flux-diff.txt >> diff-output.txt
+        cat tmp-flux-diff.txt | tee -a diff-output.txt
       elif [ $? -gt 1 ]; then
         printf -- '\n---\xe2\x9c\x97 An error occurred in %s---\n' $dir | tee -a diff-output.txt
         # Clean up and exit
