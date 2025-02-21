@@ -28,5 +28,7 @@ runs:
       shell: bash
       id: set-output
       run: |
-        diff_output=$(cat diff-output.txt)
-        echo "diff_output=$diff_output" >> $GITHUB_OUTPUT
+        DIFF_OUTPUT=$(cat diff-output.txt)
+        echo "diff-output<<EOF" >> $GITHUB_OUTPUT
+        echo "$DIFF_OUTPUT" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
