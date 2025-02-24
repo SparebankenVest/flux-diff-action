@@ -28,7 +28,7 @@ jobs:
 
 ## Inputs
 
-None
+- **path-filter**: paths that you want to do flux diff against. Supports glob patterns with wildcard characters (`*` and `**`). E.g. `/some/path/*` or `**/other-path/*`.
 
 ## Outputs
 
@@ -77,6 +77,8 @@ jobs:
           use-kubelogin: true
       - name: Flux diff
         uses: SparebankenVest/flux-diff-action@0.1.1
+        with:
+          path-filter: "some/path/*"
         id: flux-diff
       - name: Show flux diff in PR
         if: github.event_name == 'pull_request'
