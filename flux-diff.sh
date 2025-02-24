@@ -1,6 +1,8 @@
 # Find all changed files compared to main branch
 if [ -n "$PATH_FILTER" ]; then
-  git diff origin/main --name-only "$PATH_FILTER" > tmp-changed-files.txt
+  for path in $PATH_FILTER; do
+    git diff origin/main --name-only "$path" >> tmp-changed-files.txt
+  done
 else
   git diff origin/main --name-only > tmp-changed-files.txt
 fi
