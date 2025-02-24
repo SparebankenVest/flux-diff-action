@@ -28,7 +28,7 @@ jobs:
 
 ## Inputs
 
-- **path-filter**: paths that you want to do flux diff against. Supports glob patterns with wildcard characters (`*` and `**`). E.g. `/some/path/*` or `**/other-path/*`.
+- **path-filter**: paths that you want to do flux diff against. Supports glob patterns with wildcard characters (`*` and `**`). E.g. `/some/path/*` or `**/other-path/*`. Defaults to `.`
 
 ## Outputs
 
