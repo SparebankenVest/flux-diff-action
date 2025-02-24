@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Flux Diff
-        uses: SparebankenVest/flux-diff-action@latest
+        uses: SparebankenVest/flux-diff-action@main
         id: flux-diff
 ```
 
@@ -76,7 +76,7 @@ jobs:
           cluster-name: '<azure-cluster-name>'
           use-kubelogin: true
       - name: Flux diff
-        uses: SparebankenVest/flux-diff-action@0.1.1
+        uses: SparebankenVest/flux-diff-action@main
         with:
           path-filter: "some/path/*"
         id: flux-diff
