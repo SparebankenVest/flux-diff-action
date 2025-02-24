@@ -2,6 +2,11 @@
 name: 'Flux diff'
 description: 'Run flux diff to see what changes would be applied to the cluster'
 author: 'SPV'
+inputs:
+  path-filter:
+    description: "Path to filter the flux diff"
+    required: true
+    default: "."
 outputs:
   diff-output:
     description: "Flux diff output"
@@ -22,7 +27,7 @@ runs:
       env:
         GITHUB_ACTION_PATH: ${{ github.action_path }}
     - name: Run flux-diff.sh
-      run: ${{ github.action_path }}/flux-diff.sh
+      run: PATH_FILTER=${{ inputs.path-filter }} ${{ github.action_path }}/flux-diff.sh
       shell: bash
     - name: Set diff output as action output
       shell: bash

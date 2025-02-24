@@ -1,6 +1,9 @@
 # Find all changed files compared to main branch
-
-git diff origin/main --name-only > tmp-changed-files.txt
+if [ -n "$PATH_FILTER" ]; then
+  git diff origin/main --name-only "$PATH_FILTER" > tmp-changed-files.txt
+else
+  git diff origin/main --name-only > tmp-changed-files.txt
+fi
 
 # Find all parent directories of changed files containing kustomization.yaml
 cat tmp-changed-files.txt | xargs -n 1 dirname | sort -u > tmp-changed-dirs.txt
