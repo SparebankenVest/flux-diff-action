@@ -1,5 +1,7 @@
 # Find all changed files compared to main branch
 if [ -n "$PATH_FILTER" ]; then
+  # Convert comma separated PATH_FILTER to space separated
+  PATH_FILTER=$(echo "$PATH_FILTER" | tr ',' ' ')
   for path in $PATH_FILTER; do
     # Check if path filter is valid. If not, skip
     if ! git ls-files --error-unmatch "$path" > /dev/null 2>&1; then
