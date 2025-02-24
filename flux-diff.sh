@@ -1,6 +1,10 @@
 # Find all changed files compared to main branch
 if [ -n "$PATH_FILTER" ]; then
   for path in $PATH_FILTER; do
+    # Check if path filter is valid. If not, skip
+    if ! git ls-files --error-unmatch "$path" > /dev/null 2>&1; then
+      continue
+    fi
     git diff origin/main --name-only "$path" >> tmp-changed-files.txt
   done
 else
