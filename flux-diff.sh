@@ -62,9 +62,9 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
           cat tmp-flux-diff.txt | tee -a diff-output.txt
           ;;
         *)
-          printf -- '\n---\xe2\x9c\x97 An error occurred in %s---\n' $dir | tee -a diff-output.txt
+          printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' $dir
           # Clean up and exit
-          rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt
+          rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt diff-output.txt
           exit 1
           ;;
       esac

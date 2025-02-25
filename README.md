@@ -5,6 +5,7 @@ This GitHub Action compares the current state of your Kubernetes cluster with th
 ## Pre-requisite/Assumptions:
 - Runner needs access to the cluster that the flux diff is performed against.
 - Github flow branching strategy. Aka the Flux diff is done against the main branch in the git repo (`main`).
+- Assumes that the gitops repo uses the `/tenant` and `/apps` structure.
 
 ## Usage
 
@@ -25,6 +26,26 @@ jobs:
         uses: SparebankenVest/flux-diff-action@main
         id: flux-diff
 ```
+In order for `flux-diff-action` to understand what Flux kustomization it should diff against inside the cluster you need to add the following tags in the `kustomization.yaml` in the folder that the code changes appears. Example:
+```
+/tenant
+/apps
+└── /app1
+  └── /dev
+    ├── kustomization.yaml
+    └── app1.yaml
+```
+E.g. in the given gitops repo structure: If there is a change to `/apps/app1/dev/app1.yaml` flux-diff action will look inside the `/apps/app1/dev/kustomization.yaml` after the header comments `# flux-tenant-name: app1-tenant` and `# flux-tenant-ns: app1-tenant-ns`. That is, the `/apps/app1/dev/kustomization.yaml` needs to look like the following:
+
+```yaml
+# flux-tenant-name: app1-tenant
+# flux-tenant-ns: app1-tenant-ns
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - app1.yaml
+```
+If the comments are not provided the action will skip the diffing in this folder.
 
 ## Inputs
 
