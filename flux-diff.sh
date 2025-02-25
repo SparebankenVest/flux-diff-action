@@ -40,8 +40,8 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     # Get tenant name and namespace from header comment in kustomization.yaml on the form:
     # flux-tenant-name: <tenant-name>
     # flux-tenant-ns: <tenant-namespace>
-    TENANT=$(yq 'head_comment' "$dir/kustomization.yaml" | grep flux-tenant-name | yq '.flux-tenant-name')
-    NAMESPACE=$(yq 'head_comment' "$dir/kustomization.yaml" | grep flux-tenant-ns | yq '.flux-tenant-ns')
+    TENANT=$(yq '... | headComment | select(. != "")' "$dir/kustomization.yaml" | grep flux-tenant-name | yq '.flux-tenant-name')
+    NAMESPACE=$(yq '... | headComment | select(. != "")' "$dir/kustomization.yaml" | grep flux-tenant-ns | yq '.flux-tenant-ns')
 
     if [ "$TENANT" == null ] || [ "$NAMESPACE" == null ]; then
       printf "\nNo 'flux-tenant-name' and/or 'flux-tenant-ns' comment found in $dir/kustomization.yaml. Skipping diff.\n" | tee -a diff-output.txt
