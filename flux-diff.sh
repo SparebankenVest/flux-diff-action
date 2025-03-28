@@ -13,6 +13,31 @@ else
   git diff origin/main --name-only > tmp-changed-files.txt
 fi
 
+# Autodetect tenants to ignore by finding new sync.yaml files in tenant directory
+if [ "$AUTODETECT_IGNORE_TENANTS" = "true" ]; then
+  # Find all new sync.yaml files in tenant directories
+  git diff origin/main --name-only "tenants/**/sync.yaml" > tmp-sync-files.txt
+
+  # Extract tenant name from the tenant sync.yaml files
+  while read file;
+  do
+    # Get tenant name from sync.yaml file
+    TENANT=$(yq '.metadata.name' $file)
+    if [ "$TENANT" != null ]; then
+      # Append tenant name to IGNORE_TENANTS variable
+      if [ -z "$IGNORE_TENANTS" ]; then
+        IGNORE_TENANTS="$TENANT"
+      else
+        IGNORE_TENANTS="$IGNORE_TENANTS,$TENANT"
+      fi
+    fi
+  done < tmp-sync-files.txt
+  # Clean up
+  rm -f tmp-sync-files.txt
+  unset TENANT
+fi
+
+
 # Find all parent directories of changed files containing kustomization.yaml
 cat tmp-changed-files.txt | xargs -n 1 dirname | sort -u > tmp-changed-dirs.txt
 
@@ -43,6 +68,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     TENANT=$(yq '... | headComment | select(. != "")' "$dir/kustomization.yaml" | grep flux-tenant-name | yq '.flux-tenant-name')
     NAMESPACE=$(yq '... | headComment | select(. != "")' "$dir/kustomization.yaml" | grep flux-tenant-ns | yq '.flux-tenant-ns')
 
+
     if [ "$TENANT" == null ] || [ "$NAMESPACE" == null ]; then
       printf "\nNo 'flux-tenant-name' and/or 'flux-tenant-ns' comment found in $dir/kustomization.yaml. Skipping diff.\n" | tee -a diff-output.txt
       continue
@@ -52,7 +78,16 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
     printf "\n---------- Flux diffing $dir----------\n"
 
     if ! [[ "$TENANT" == null ]] ; then
+      # Check if the tenant should be ignored
+      if [[ ",$IGNORE_TENANTS," == *",$TENANT,"* ]]; then
+        printf "\nTenant $TENANT is in the ignore list. Skipping diff for $dir.\n"
+        continue
+      fi
+
+      # Perform flux diff
       flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt
+
+      # Check if flux diff was successful
       case $? in
         0)
           printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir

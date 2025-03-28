@@ -49,7 +49,9 @@ If the comments are not provided the action will skip the diffing in this folder
 
 ## Inputs
 
-- **path-filter**: Comma separated paths that you want to do flux diff against. Supports glob patterns with wildcard characters (`*` and `**`). E.g. `/some/path/*` or `**/other-path/*` or `/some/path/*,**/other-path/*`. Defaults to `.`
+- **path-filter**: Comma separated string of paths that you want to do flux diff against. Supports glob patterns with wildcard characters (`*` and `**`). E.g. `/some/path/*` or `**/other-path/*` or `/some/path/*,**/other-path/*`. Defaults to `.`
+- **autodetect-ingore-tenants**: Flag to enable autodetection of tenants to ignore. Either "true" or "false". Useful when new tenants are applied to the repo, and you dont want the action to fail. It will look for new sync.yaml files in /tenant folder and assumes the sync.yaml contains a `apiVersion: kustomize.toolkit.fluxcd.io/v1 kind: Kustomization` object. The name of that object is used as tenant name.
+- **additional-ignore-tenants**: Comma separated string of Flux tenants that you want to ignore. Useful if the tenant do not allready exist in the cluster and you do not want the action to fail.
 
 ## Outputs
 
@@ -90,7 +92,7 @@ jobs:
         uses: azure/use-kubelogin@v1
         with:
           kubelogin-version: 'v0.0.24'
-      - name:
+      - name: Set AKS context
         uses: azure/aks-set-context@v4
         with:
           resource-group: '<azure-cluster-rg>'
@@ -100,6 +102,8 @@ jobs:
         uses: SparebankenVest/flux-diff-action@main
         with:
           path-filter: "some/path/*"
+          autodetect-ignore-tenants: "true"
+          additional-ignore-tenants: "some-tenant1,other-tenant"
         id: flux-diff
       - name: Show flux diff in PR
         if: github.event_name == 'pull_request'
