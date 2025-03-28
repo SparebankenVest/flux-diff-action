@@ -37,7 +37,7 @@ runs:
     - name: Run flux-diff.sh
       run: |
         PATH_FILTER=${{ inputs.path-filter }} \
-        AUTODETECT_IGNORE_TENANTS={{ inputs.autodetect-ignore-tenants }} \
+        AUTODETECT_IGNORE_TENANTS=${{ inputs.autodetect-ignore-tenants }} \
         IGNORE_TENANTS=${{ inputs.additional-ignore-tenants }} \
         ${{ github.action_path }}/flux-diff.sh
       shell: bash
