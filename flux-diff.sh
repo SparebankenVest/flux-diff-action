@@ -1,6 +1,6 @@
 # Make a test to check if yq, git, flux, dirname, xargs are installed
 #!/bin/bash
-set -euo pipefail
+
 # Check if yq is installed
 if ! command -v yq &> /dev/null; then
   echo "yq could not be found. Please install yq to run this script."
