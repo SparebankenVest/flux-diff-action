@@ -39,7 +39,7 @@ fi
 
 
 # Find all parent directories of changed files containing kustomization.yaml
-cat tmp-changed-files.txt | xargs -n 1 dirname | sort -u > tmp-changed-dirs.txt
+cat tmp-changed-files.txt | xargs dirname | sort -u > tmp-changed-dirs.txt
 
 touch tmp-changed-kustomization-dirs.txt
 while read dir;
