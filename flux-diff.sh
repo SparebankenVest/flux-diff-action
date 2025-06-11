@@ -39,7 +39,20 @@ fi
 
 
 # Find all parent directories of changed files containing kustomization.yaml
+printf "\n----------Changed files:----------\n"
+if [ -s tmp-changed-files.txt ]; then
+  cat tmp-changed-files.txt | sort -u
+else
+  echo "No changed files found."
+fi
 cat tmp-changed-files.txt | xargs dirname | sort -u > tmp-changed-dirs.txt
+printf "\n----------Changed files in directories:----------\n"
+if [ -s tmp-changed-dirs.txt ]; then
+  cat tmp-changed-dirs.txt | sort -u
+else
+  echo "No changed directories found."
+fi
+
 
 touch tmp-changed-kustomization-dirs.txt
 while read dir;
