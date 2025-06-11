@@ -67,12 +67,11 @@ if [ "$AUTODETECT_IGNORE_TENANTS" = "true" ]; then
   unset TENANT
 fi
 
-# Add comment for the following if statement
+# Checks if the file 'tmp-changed-files.txt' exists and is not empty before processing.
+# If it is not empty, extract the directory names of the changed files, sort them uniquely, and save to 'tmp-changed-dirs.txt'.
 if [ -s tmp-changed-files.txt ]; then
   cat tmp-changed-files.txt | xargs dirname | sort -u > tmp-changed-dirs.txt
 fi
-
-
 
 touch tmp-changed-kustomization-dirs.txt
 while read dir;
