@@ -22,11 +22,11 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Setup YQ
-      run: |
-        sudo curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq
-        sudo chmod +x /usr/local/bin/yq
-      shell: bash
+    # - name: Setup YQ
+    #   run: |
+    #     sudo curl -sL https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -o /usr/local/bin/yq
+    #     sudo chmod +x /usr/local/bin/yq
+    #   shell: bash
     - name: Setup Flux CLI
       uses: fluxcd/flux2/action@main
     - name: Set GitHub Path

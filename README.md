@@ -101,7 +101,7 @@ jobs:
       - name: Flux diff
         uses: SparebankenVest/flux-diff-action@main
         with:
-          path-filter: "some/path/*"
+          path-filter: "./some/path/*"
           autodetect-ignore-tenants: "true"
           additional-ignore-tenants: "some-tenant1,other-tenant"
         id: flux-diff
