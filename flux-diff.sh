@@ -1,3 +1,33 @@
+# Make a test to check if yq, git, flux, dirname, xargs are installed
+#!/bin/bash
+set -euo pipefail
+# Check if yq is installed
+if ! command -v yq &> /dev/null; then
+  echo "yq could not be found. Please install yq to run this script."
+  exit 1
+fi
+# Check if git is installed
+if ! command -v git &> /dev/null; then
+  echo "git could not be found. Please install git to run this script."
+  exit 1
+fi
+# Check if flux is installed
+if ! command -v flux &> /dev/null; then
+  echo "flux could not be found. Please install flux to run this script."
+  exit 1
+fi
+# Check if dirname is installed
+if ! command -v dirname &> /dev/null; then
+  echo "dirname could not be found. Please install dirname to run this script."
+  exit 1
+fi
+# Check if xargs is installed
+if ! command -v xargs &> /dev/null; then
+  echo "xargs could not be found. Please install xargs to run this script."
+  exit 1
+fi
+
+
 # Find all changed files compared to main branch
 if [ -n "$PATH_FILTER" ]; then
   # Convert comma separated PATH_FILTER to space separated
@@ -37,21 +67,11 @@ if [ "$AUTODETECT_IGNORE_TENANTS" = "true" ]; then
   unset TENANT
 fi
 
-
-# Find all parent directories of changed files containing kustomization.yaml
-printf "\n----------Changed files:----------\n"
+# Add comment for the following if statement
 if [ -s tmp-changed-files.txt ]; then
-  cat tmp-changed-files.txt | sort -u
-else
-  echo "No changed files found."
+  cat tmp-changed-files.txt | xargs dirname | sort -u > tmp-changed-dirs.txt
 fi
-cat tmp-changed-files.txt | xargs dirname | sort -u > tmp-changed-dirs.txt
-printf "\n----------Changed files in directories:----------\n"
-if [ -s tmp-changed-dirs.txt ]; then
-  cat tmp-changed-dirs.txt | sort -u
-else
-  echo "No changed directories found."
-fi
+
 
 
 touch tmp-changed-kustomization-dirs.txt
