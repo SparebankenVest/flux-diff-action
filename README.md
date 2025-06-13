@@ -90,8 +90,10 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
       - name: Setup kubelogin for non-interactive login
         uses: azure/use-kubelogin@v1
+        env:
+          GITHUB_TOKEN: $${{ secrets.GITHUB_TOKEN }}
         with:
-          kubelogin-version: 'v0.0.24'
+          kubelogin-version: 'latest'
       - name: Set AKS context
         uses: azure/aks-set-context@v4
         with:
