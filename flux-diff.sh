@@ -114,28 +114,28 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
       if [[ ",$IGNORE_TENANTS," == *",$TENANT,"* ]]; then
         printf "\nTenant $TENANT is in the ignore list. Skipping diff for $dir.\n"
         continue
+      else
+        # Perform flux diff
+        flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt
+
+        # Check if flux diff was successful
+        case $? in
+          0)
+            printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir
+            ;;
+          1)
+            printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' $dir | tee -a diff-output.txt
+            cat tmp-flux-diff.txt | tee -a diff-output.txt
+            ;;
+          *)
+            printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' $dir
+            # Clean up and exit
+            rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt diff-output.txt
+            exit 1
+            ;;
+        esac
+        continue
       fi
-
-      # Perform flux diff
-      flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt
-
-      # Check if flux diff was successful
-      case $? in
-        0)
-          printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir
-          ;;
-        1)
-          printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' $dir | tee -a diff-output.txt
-          cat tmp-flux-diff.txt | tee -a diff-output.txt
-          ;;
-        *)
-          printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' $dir
-          # Clean up and exit
-          rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt diff-output.txt
-          exit 1
-          ;;
-      esac
-      continue
     fi
     # flux diff against cluster
   done < tmp-changed-kustomization-dirs.txt
