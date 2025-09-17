@@ -113,7 +113,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
       # Check if the tenant should be ignored
       if [[ ",$IGNORE_TENANTS," == *",$TENANT,"* ]]; then
         printf -- '\n---\xE2\x9C\x93 Tenant %s ignored. Skipping diff for %s---\n' $TENANT $dir | tee -a diff-output.txt
-        printf -- 'Tenant does not already exist in the cluster, or it is explicitly ignored.\n' | tee -a diff-output.txt
+        printf -- 'Tenant is new and is assumed to not exist in cluster, or it is explicitly ignored.\n' | tee -a diff-output.txt
         continue
       else
         # Perform flux diff
