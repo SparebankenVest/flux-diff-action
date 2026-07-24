@@ -57,6 +57,32 @@ If the comments are not provided the action will skip the diffing in this folder
 
 - **diff-output**: multiline string with diff output
 
+## Secret redaction
+
+The action redacts the **values** of every `data:` and `stringData:` block in the
+diff output before it is written to `diff-output`, the workflow logs, or a PR
+comment. Each value is replaced with `<redacted>`, while the keys and the fact
+that a resource changed remain visible.
+
+**Why this is done:** `flux diff kustomization` performs a server-side dry-run,
+which means it reads the live `Secret` objects from the cluster to compute the
+diff and can emit their decoded/base64 values into its output. Because this
+action surfaces that output in PR comments and Actions logs — both readable by
+anyone with access to the repository or the run — unredacted secret values would
+otherwise leak out of the cluster and into GitHub. Redacting the values keeps
+the review signal (a Secret was added/removed, or its keys changed) without
+exposing the secret material itself.
+
+**Scope and trade-offs:**
+- Redaction is **safe-by-default**: it masks *any* `data:`/`stringData:` block,
+  so `ConfigMap` values are redacted too. This is intentional — the diff stream
+  does not carry reliable `kind:` context per line, so distinguishing a Secret's
+  `data:` from a ConfigMap's `data:` cannot be done safely. We prefer over-
+  redacting non-sensitive ConfigMap values to ever risking a leaked secret.
+- This only redacts what appears in the **output**. `flux diff` still reads the
+  Secret from the cluster in memory to compute the diff, so the identity running
+  the action still needs read access to secrets in Kubernetes RBAC (`list`).
+
 ## Example (AZURE OIDC)
 
 Here is an example of how to use this action in a workflow and comment the output back in the PR.
