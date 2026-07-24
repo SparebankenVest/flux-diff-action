@@ -118,9 +118,58 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
       else
         # Perform flux diff
         flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt
+        # Capture flux's exit code immediately; the redaction pipeline below would
+        # otherwise overwrite $? before the `case` statement inspects it.
+        FLUX_DIFF_RC=$?
+
+        # Redact Secret values from the diff output.
+        # `flux diff` reads live Secrets from the cluster to compute the diff and
+        # can emit their `data`/`stringData` contents into the output, which then
+        # ends up in workflow logs and PR comments. We keep the fact that a Secret
+        # changed (keys, add/remove) visible, but replace every value under a
+        # `data:` or `stringData:` block with a fixed placeholder so no secret
+        # material leaks. Diff line prefixes (space, +, -) are preserved.
+        #
+        # Behaviour: once inside a `data:`/`stringData:` block, every more-indented
+        # `key: value` line has its value replaced with `<redacted>`. The block
+        # ends when a line returns to the indentation of the `data:` key or less.
+        awk '
+          {
+            line = $0
+            # Strip a leading diff marker (space/+/-) for indentation analysis.
+            marker = ""
+            body = line
+            if (line ~ /^[ +-]/) { marker = substr(line, 1, 1); body = substr(line, 2) }
+
+            # Current indentation (leading spaces of the body).
+            match(body, /^ */); indent = RLENGTH
+
+            # Detect entering a data/stringData block.
+            if (body ~ /^ *(data|stringData): *$/) {
+              in_secret = 1
+              secret_indent = indent
+              print line
+              next
+            }
+
+            if (in_secret) {
+              # Leaving the block when indentation is back at/above the key level
+              # on a non-blank line.
+              if (body !~ /^ *$/ && indent <= secret_indent) {
+                in_secret = 0
+              } else if (body ~ /^ *[^ :][^:]*: */) {
+                # A "key: value" entry inside the block: redact the value.
+                sub(/: *.*$/, ": <redacted>", body)
+                print marker body
+                next
+              }
+            }
+            print line
+          }
+        ' tmp-flux-diff.txt > tmp-flux-diff-redacted.txt && mv tmp-flux-diff-redacted.txt tmp-flux-diff.txt
 
         # Check if flux diff was successful
-        case $? in
+        case $FLUX_DIFF_RC in
           0)
             printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir
             ;;
