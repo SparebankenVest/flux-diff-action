@@ -178,6 +178,55 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
             cat tmp-flux-diff.txt | tee -a diff-output.txt
             ;;
           *)
+            # flux exited with an error (>1). Some of these are benign: a
+            # least-privilege diff identity (see the svai-flux-diff ClusterRole)
+            # deliberately has NO access to RBAC objects (Role/RoleBinding/
+            # ClusterRole/ClusterRoleBinding), because diffing them would require
+            # the escalation/bind verbs and turn the identity into a privilege-
+            # escalation surface. flux reports those objects as dry-run
+            # "Forbidden" or "not found" errors.
+            #
+            # We skip the diff for a kustomization ONLY when every error entry in
+            # the flux output refers to an RBAC object. If ANY non-RBAC error is
+            # present we fail as before, so genuine problems are never masked.
+            #
+            # flux packs errors into a bracketed, comma-separated block that may
+            # span multiple lines, e.g.:
+            #   ✗ [Role/ns/name dry-run failed (Forbidden): ... not currently held:
+            #      {APIGroups:["apps"], Resources:["deployments/scale"], ...},
+            #      RoleBinding/ns/name not found: ...]
+            # Flatten to one line, extract the [...] block, then split into entries
+            # on ", <Kind>/" where <Kind> starts uppercase (so lowercase tokens like
+            # "deployments/scale" inside detail braces are not treated as entries).
+            FLAT_DIFF=$(tr '\n' ' ' < tmp-flux-diff.txt)
+            ERROR_BLOCK=$(echo "$FLAT_DIFF" | sed -n 's/.*✗ \[\(.*\)\].*/\1/p')
+
+            NON_RBAC_ERRORS=0
+            HAS_RBAC_SKIP=0
+            if [ -z "$ERROR_BLOCK" ]; then
+              # No parseable ✗ [...] block (e.g. a build failure) — genuine error.
+              NON_RBAC_ERRORS=1
+            else
+              RBAC_KIND_RE='^(Role|RoleBinding|ClusterRole|ClusterRoleBinding)/'
+              ERROR_ENTRIES=$(echo "$ERROR_BLOCK" | sed 's/, \([A-Z][A-Za-z]*\/\)/\n\1/g')
+              while IFS= read -r entry; do
+                # Only entry-start lines begin with "<UpperKind>/"; skip detail lines.
+                echo "$entry" | grep -Eq '^[A-Z][A-Za-z]*/' || continue
+                if echo "$entry" | grep -Eq "$RBAC_KIND_RE"; then
+                  HAS_RBAC_SKIP=1
+                else
+                  NON_RBAC_ERRORS=1
+                fi
+              done <<< "$ERROR_ENTRIES"
+            fi
+
+            if [ "$NON_RBAC_ERRORS" -eq 0 ] && [ "$HAS_RBAC_SKIP" -eq 1 ]; then
+              # All errors are RBAC-object errors: skip, don't fail.
+              printf -- '\n---\xe2\x9a\xa0 RBAC objects skipped in %s---\n' "$dir" | tee -a diff-output.txt
+              printf -- 'The flux-diff identity has no access to RBAC objects (Role/RoleBinding/ClusterRole/ClusterRoleBinding) by design. These are not diffed against the cluster; review their YAML in the PR directly.\n' | tee -a diff-output.txt
+              continue
+            fi
+
             printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' $dir
             # Clean up and exit
             rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt diff-output.txt

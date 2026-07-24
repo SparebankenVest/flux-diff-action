@@ -57,6 +57,26 @@ If the comments are not provided the action will skip the diffing in this folder
 
 - **diff-output**: multiline string with diff output
 
+## RBAC objects are not diffed
+
+The action **skips** `Role`, `RoleBinding`, `ClusterRole`, and `ClusterRoleBinding`
+objects instead of diffing them, emitting a warning in the output rather than
+failing the run.
+
+**Why:** `flux diff` performs a server-side dry-run apply. For RBAC objects,
+Kubernetes enforces the escalation (`escalate`) and `bind` checks even on a
+dry-run — the diff identity may only author an RBAC object whose granted
+permissions it already holds, or it must be given the `escalate`/`bind` verbs.
+Granting those to a PR-pipeline identity would make it capable of privilege
+escalation, defeating the purpose of running the diff under a least-privilege
+role. Rather than widen the identity, the action treats RBAC-object dry-run
+errors (`Forbidden` / `not found`) as a skip.
+
+This skip is applied **only when every error** reported by `flux diff` for a
+kustomization is an RBAC-object error. If any non-RBAC error is present, the run
+still fails, so genuine problems are never masked. Review RBAC changes as plain
+YAML in the pull request.
+
 ## Secret redaction
 
 The action redacts the **values** of every `data:` and `stringData:` block in the
