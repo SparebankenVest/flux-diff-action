@@ -116,8 +116,12 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
         printf -- 'Tenant is new and is assumed to not exist in cluster, or it is explicitly ignored.\n' | tee -a diff-output.txt
         continue
       else
-        # Perform flux diff
-        flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt
+        # Perform flux diff.
+        # Capture BOTH stdout and stderr: flux writes the diff to stdout, but
+        # emits dry-run error blocks (✗ [ ... ]) to stderr. The RBAC-skip
+        # classifier below reads this file, so it must contain the error block —
+        # otherwise every failed dry-run looks like a generic error.
+        flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt 2>&1
         # Capture flux's exit code immediately; the redaction pipeline below would
         # otherwise overwrite $? before the `case` statement inspects it.
         FLUX_DIFF_RC=$?
