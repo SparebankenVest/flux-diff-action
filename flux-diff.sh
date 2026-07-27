@@ -191,34 +191,50 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
             # present we fail as before, so genuine problems are never masked.
             #
             # flux packs errors into a bracketed, comma-separated block that may
-            # span multiple lines, e.g.:
+            # span multiple lines and be very long, e.g.:
             #   ✗ [Role/ns/name dry-run failed (Forbidden): ... not currently held:
             #      {APIGroups:["apps"], Resources:["deployments/scale"], ...},
             #      RoleBinding/ns/name not found: ...]
-            # Flatten to one line, extract the [...] block, then split into entries
-            # on ", <Kind>/" where <Kind> starts uppercase (so lowercase tokens like
-            # "deployments/scale" inside detail braces are not treated as entries).
+            # We extract the content AFTER the opening "✗ [" WITHOUT requiring a
+            # closing "]" (the block can be huge; we must not depend on matching
+            # the bracket), then split into entries on ", <Kind>/" where <Kind>
+            # starts uppercase (so lowercase tokens like "deployments/scale"
+            # inside detail braces are not treated as entries).
             FLAT_DIFF=$(tr '\n' ' ' < tmp-flux-diff.txt)
-            ERROR_BLOCK=$(echo "$FLAT_DIFF" | sed -n 's/.*✗ \[\(.*\)\].*/\1/p')
 
             NON_RBAC_ERRORS=0
             HAS_RBAC_SKIP=0
-            if [ -z "$ERROR_BLOCK" ]; then
-              # No parseable ✗ [...] block (e.g. a build failure) — genuine error.
-              NON_RBAC_ERRORS=1
-            else
-              RBAC_KIND_RE='^(Role|RoleBinding|ClusterRole|ClusterRoleBinding)/'
-              ERROR_ENTRIES=$(echo "$ERROR_BLOCK" | sed 's/, \([A-Z][A-Za-z]*\/\)/\n\1/g')
-              while IFS= read -r entry; do
-                # Only entry-start lines begin with "<UpperKind>/"; skip detail lines.
-                echo "$entry" | grep -Eq '^[A-Z][A-Za-z]*/' || continue
-                if echo "$entry" | grep -Eq "$RBAC_KIND_RE"; then
-                  HAS_RBAC_SKIP=1
-                else
-                  NON_RBAC_ERRORS=1
-                fi
-              done <<< "$ERROR_ENTRIES"
-            fi
+            case "$FLAT_DIFF" in
+              *"✗ ["*)
+                # Take everything after the first "✗ [", then drop a trailing "]".
+                ERROR_BLOCK=${FLAT_DIFF#*✗ [}
+                ERROR_BLOCK=${ERROR_BLOCK%]*}
+
+                RBAC_KIND_RE='^(Role|RoleBinding|ClusterRole|ClusterRoleBinding)/'
+                ERROR_ENTRIES=$(echo "$ERROR_BLOCK" | sed 's/, \([A-Z][A-Za-z]*\/\)/\n\1/g')
+                while IFS= read -r entry; do
+                  # Only entry-start lines begin with "<UpperKind>/"; skip detail lines.
+                  echo "$entry" | grep -Eq '^[A-Z][A-Za-z]*/' || continue
+                  if echo "$entry" | grep -Eq "$RBAC_KIND_RE"; then
+                    HAS_RBAC_SKIP=1
+                  else
+                    NON_RBAC_ERRORS=1
+                  fi
+                done <<< "$ERROR_ENTRIES"
+
+                # Fail-safe: if the flux output has an opening "✗ [" but NO closing
+                # "]" anywhere, it was truncated and an unseen non-RBAC error could
+                # be hiding in the tail. Do not skip on truncated output.
+                case "$FLAT_DIFF" in
+                  *"]"*) : ;;
+                  *) NON_RBAC_ERRORS=1 ;;
+                esac
+                ;;
+              *)
+                # No flux error block at all (e.g. a build failure) — genuine error.
+                NON_RBAC_ERRORS=1
+                ;;
+            esac
 
             if [ "$NON_RBAC_ERRORS" -eq 0 ] && [ "$HAS_RBAC_SKIP" -eq 1 ]; then
               # All errors are RBAC-object errors: skip, don't fail.
