@@ -241,7 +241,21 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
             esac
 
             if [ "$NON_RBAC_ERRORS" -eq 0 ] && [ "$HAS_RBAC_SKIP" -eq 1 ]; then
-              # All errors are RBAC-object errors: skip, don't fail.
+              # All ERRORS are RBAC-object errors, so we do not fail. But the same
+              # kustomization may ALSO contain real drift that flux computed and
+              # printed (e.g. a HelmRelease or CronJob change) — flux still exits
+              # non-zero because of the forbidden RBAC objects, which is why we land
+              # here. We must therefore still surface that real drift, and only
+              # replace the RBAC error block with the "skipped" notice.
+              #
+              # flux prints the drift first and the "✗ [ ... ]" error summary last.
+              # Print everything up to the "✗ [" line, then the skip notice.
+              PRE_ERROR=$(sed '/✗ \[/,$d' tmp-flux-diff.txt)
+              if [ -n "$(echo "$PRE_ERROR" | tr -d '[:space:]')" ]; then
+                # There is real drift to show.
+                printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' "$dir" | tee -a diff-output.txt
+                echo "$PRE_ERROR" | tee -a diff-output.txt
+              fi
               printf -- '\n---\xe2\x9a\xa0 RBAC objects skipped in %s---\n' "$dir" | tee -a diff-output.txt
               printf -- 'The flux-diff identity has no access to RBAC objects (Role/RoleBinding/ClusterRole/ClusterRoleBinding) by design. These are not diffed against the cluster; review their YAML in the PR directly.\n' | tee -a diff-output.txt
               continue
