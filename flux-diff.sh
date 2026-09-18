@@ -47,7 +47,7 @@ fi
 # Autodetect tenants to ignore by finding new sync.yaml files in tenant directory
 if [ "$AUTODETECT_IGNORE_TENANTS" = "true" ]; then
   # Find all new sync.yaml files in tenant directories
-  git diff origin/main --name-only -z -- "tenants/**/sync.yaml" > tmp-sync-files.txt
+  git diff origin/main --diff-filter=A --name-only -z -- "tenants/**/sync.yaml" > tmp-sync-files.txt
 
   # Extract tenant name from the tenant sync.yaml files
   while IFS= read -r -d '' file;
@@ -77,7 +77,7 @@ fi
 while IFS= read -r -d '' dir;
 do
   # Check if kustomization.yaml exists in directory and if directory is not already in tmp-changed-kustomization-dirs.txt
-  if [ -f "$dir/kustomization.yaml" ] && ! grep -Fzxq "$dir" tmp-changed-kustomization-dirs.txt; then
+  if [ -f "$dir/kustomization.yaml" ] && ! grep -Fzxq -- "$dir" tmp-changed-kustomization-dirs.txt; then
     # Add directory to tmp-changed-kustomization-dirs.txt
     printf '%s\0' "$dir" >> tmp-changed-kustomization-dirs.txt
   fi
