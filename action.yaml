@@ -8,7 +8,11 @@ inputs:
     required: true
     default: "."
   autodetect-ignore-tenants:
-    description: "Enable autodetect Flux tenants to ignore in the flux diff. It will look for new sync.yaml files in /tenant folder and assumes the sync.yaml contains a `apiVersion: kustomize.toolkit.fluxcd.io/v1 kind: Kustomization` object. The name of that object is used as tenant name."
+    description: >-
+      Enable autodetect Flux tenants to ignore in the flux diff. It will look for
+      new sync.yaml files in /tenant folder and assumes the sync.yaml contains a
+      `apiVersion: kustomize.toolkit.fluxcd.io/v1 kind: Kustomization` object.
+      The name of that object is used as tenant name.
     required: false
     default: "true"
   additional-ingore-tenants:
@@ -36,11 +40,12 @@ runs:
         GITHUB_ACTION_PATH: ${{ github.action_path }}
     - name: Run flux-diff.sh
       run: |
-        PATH_FILTER=${{ inputs.path-filter }} \
-        AUTODETECT_IGNORE_TENANTS=${{ inputs.autodetect-ignore-tenants }} \
-        IGNORE_TENANTS=${{ inputs.additional-ignore-tenants }} \
         ${{ github.action_path }}/flux-diff.sh
       shell: bash
+      env:
+        PATH_FILTER: ${{ inputs.path-filter }}
+        AUTODETECT_IGNORE_TENANTS: ${{ inputs.autodetect-ignore-tenants }}
+        IGNORE_TENANTS: ${{ inputs.additional-ignore-tenants }}
     - name: Set diff output as action output
       shell: bash
       id: set-output

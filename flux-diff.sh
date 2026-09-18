@@ -1,5 +1,8 @@
-# Make a test to check if yq, git, flux, dirname, xargs are installed
 #!/bin/bash
+
+# Make a test to check if yq, git, flux, dirname, xargs are installed
+
+trap 'rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt tmp-flux-diff-redacted.txt tmp-sync-files.txt' EXIT
 
 # Check if yq is installed
 if ! command -v yq &> /dev/null; then
@@ -32,25 +35,25 @@ fi
 : > tmp-changed-files.txt
 : > tmp-changed-dirs.txt
 if [ -n "$PATH_FILTER" ]; then
-  # Convert comma separated PATH_FILTER to space separated
-  PATH_FILTER=$(echo "$PATH_FILTER" | tr ',' ' ')
-  for path in $PATH_FILTER; do
-    git diff origin/main --name-only -- "$path" >> tmp-changed-files.txt
+  # Split only on commas so paths containing spaces remain a single pathspec.
+  IFS=',' read -r -a path_filters <<< "$PATH_FILTER"
+  for path in "${path_filters[@]}"; do
+    git diff origin/main --name-only -z -- "$path" >> tmp-changed-files.txt
   done
 else
-  git diff origin/main --name-only >> tmp-changed-files.txt
+  git diff origin/main --name-only -z >> tmp-changed-files.txt
 fi
 
 # Autodetect tenants to ignore by finding new sync.yaml files in tenant directory
 if [ "$AUTODETECT_IGNORE_TENANTS" = "true" ]; then
   # Find all new sync.yaml files in tenant directories
-  git diff origin/main --name-only "tenants/**/sync.yaml" > tmp-sync-files.txt
+  git diff origin/main --name-only -z -- "tenants/**/sync.yaml" > tmp-sync-files.txt
 
   # Extract tenant name from the tenant sync.yaml files
-  while read file;
+  while IFS= read -r -d '' file;
   do
     # Get tenant name from sync.yaml file
-    TENANT=$(yq '.metadata.name' $file)
+    TENANT=$(yq '.metadata.name' "$file")
     if [ "$TENANT" != null ]; then
       # Append tenant name to IGNORE_TENANTS variable
       if [ -z "$IGNORE_TENANTS" ]; then
@@ -60,24 +63,23 @@ if [ "$AUTODETECT_IGNORE_TENANTS" = "true" ]; then
       fi
     fi
   done < tmp-sync-files.txt
-  # Clean up
-  rm -f tmp-sync-files.txt
   unset TENANT
 fi
 
 # Checks if the file 'tmp-changed-files.txt' exists and is not empty before processing.
-# If it is not empty, extract the directory names of the changed files, sort them uniquely, and save to 'tmp-changed-dirs.txt'.
+# Git permits whitespace in filenames, so preserve NUL delimiters while extracting
+# and deduplicating the directories.
 if [ -s tmp-changed-files.txt ]; then
-  xargs -r -n1 dirname < tmp-changed-files.txt | sort -u > tmp-changed-dirs.txt
+  xargs -r -0 -n1 dirname -- < tmp-changed-files.txt | sort -zu > tmp-changed-dirs.txt
 fi
 
-touch tmp-changed-kustomization-dirs.txt
-while read dir;
+: > tmp-changed-kustomization-dirs.txt
+while IFS= read -r -d '' dir;
 do
   # Check if kustomization.yaml exists in directory and if directory is not already in tmp-changed-kustomization-dirs.txt
-  if [ -f "$dir/kustomization.yaml" ] && ! grep -Fxq "$dir" tmp-changed-kustomization-dirs.txt; then
+  if [ -f "$dir/kustomization.yaml" ] && ! grep -Fzxq "$dir" tmp-changed-kustomization-dirs.txt; then
     # Add directory to tmp-changed-kustomization-dirs.txt
-    echo $dir >> tmp-changed-kustomization-dirs.txt
+    printf '%s\0' "$dir" >> tmp-changed-kustomization-dirs.txt
   fi
 done < tmp-changed-dirs.txt
 
@@ -85,12 +87,12 @@ done < tmp-changed-dirs.txt
 if [ -s tmp-changed-kustomization-dirs.txt ]; then
   # Print all changed kustomization directories
   printf "\n----------Folders to flux diff:----------\n"
-  cat tmp-changed-kustomization-dirs.txt
+  tr '\0' '\n' < tmp-changed-kustomization-dirs.txt
 
   # Create output file.
   touch diff-output.txt
   # Loop over all lines in tmp-changed-kustomization-dirs and do diff against cluster
-  while read dir;
+  while IFS= read -r -d '' dir <&3;
   do
     # Get tenant name and namespace from header comment in kustomization.yaml on the form:
     # flux-tenant-name: <tenant-name>
@@ -100,17 +102,17 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
 
 
     if [ "$TENANT" == null ] || [ "$NAMESPACE" == null ]; then
-      printf "\nNo 'flux-tenant-name' and/or 'flux-tenant-ns' comment found in $dir/kustomization.yaml. Skipping diff.\n" | tee -a diff-output.txt
+      printf "\nNo 'flux-tenant-name' and/or 'flux-tenant-ns' comment found in %s/kustomization.yaml. Skipping diff.\n" "$dir" | tee -a diff-output.txt
       continue
     fi
 
     # Check if kustomization file has tenant header comment. If not, skip
-    printf "\n---------- Flux diffing $dir----------\n"
+    printf '\n---------- Flux diffing %s----------\n' "$dir"
 
     if ! [[ "$TENANT" == null ]] ; then
       # Check if the tenant should be ignored
       if [[ ",$IGNORE_TENANTS," == *",$TENANT,"* ]]; then
-        printf -- '\n---\xE2\x9C\x93 Tenant %s ignored. Skipping diff for %s---\n' $TENANT $dir | tee -a diff-output.txt
+        printf -- '\n---\xE2\x9C\x93 Tenant %s ignored. Skipping diff for %s---\n' "$TENANT" "$dir" | tee -a diff-output.txt
         printf -- 'Tenant is new and is assumed to not exist in cluster, or it is explicitly ignored.\n' | tee -a diff-output.txt
         continue
       else
@@ -119,7 +121,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
         # emits dry-run error blocks (✗ [ ... ]) to stderr. The RBAC-skip
         # classifier below reads this file, so it must contain the error block —
         # otherwise every failed dry-run looks like a generic error.
-        flux diff kustomization $TENANT --path $dir --progress-bar=false -n $NAMESPACE > tmp-flux-diff.txt 2>&1
+        flux diff kustomization "$TENANT" --path "$dir" --progress-bar=false -n "$NAMESPACE" > tmp-flux-diff.txt 2>&1
         # Capture flux's exit code immediately; the redaction pipeline below would
         # otherwise overwrite $? before the `case` statement inspects it.
         FLUX_DIFF_RC=$?
@@ -173,10 +175,10 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
         # Check if flux diff was successful
         case $FLUX_DIFF_RC in
           0)
-            printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' $dir
+            printf -- '\n---\xE2\x9C\x93 No changes in %s---\n' "$dir"
             ;;
           1)
-            printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' $dir | tee -a diff-output.txt
+            printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' "$dir" | tee -a diff-output.txt
             cat tmp-flux-diff.txt | tee -a diff-output.txt
             ;;
           *)
@@ -259,9 +261,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
               continue
             fi
 
-            printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' $dir
-            # Clean up and exit
-            rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt diff-output.txt
+            printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' "$dir"
             exit 1
             ;;
         esac
@@ -269,7 +269,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
       fi
     fi
     # flux diff against cluster
-  done < tmp-changed-kustomization-dirs.txt
+  done 3< tmp-changed-kustomization-dirs.txt
 fi
 
 # Check if diff-output.txt is empty and add "No changes" if it is
@@ -277,6 +277,4 @@ if [ ! -s diff-output.txt ]; then
   echo "No changes" >> diff-output.txt
 fi
 
-# Clean up
-rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt
 exit 0
