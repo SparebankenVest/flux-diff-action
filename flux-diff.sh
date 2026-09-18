@@ -29,18 +29,16 @@ fi
 
 
 # Find all changed files compared to main branch
+: > tmp-changed-files.txt
+: > tmp-changed-dirs.txt
 if [ -n "$PATH_FILTER" ]; then
   # Convert comma separated PATH_FILTER to space separated
   PATH_FILTER=$(echo "$PATH_FILTER" | tr ',' ' ')
   for path in $PATH_FILTER; do
-    # Check if path filter is valid. If not, skip
-    if ! git ls-files --error-unmatch "$path" > /dev/null 2>&1; then
-      continue
-    fi
-    git diff origin/main --name-only "$path" >> tmp-changed-files.txt
+    git diff origin/main --name-only -- "$path" >> tmp-changed-files.txt
   done
 else
-  git diff origin/main --name-only > tmp-changed-files.txt
+  git diff origin/main --name-only >> tmp-changed-files.txt
 fi
 
 # Autodetect tenants to ignore by finding new sync.yaml files in tenant directory
@@ -70,7 +68,7 @@ fi
 # Checks if the file 'tmp-changed-files.txt' exists and is not empty before processing.
 # If it is not empty, extract the directory names of the changed files, sort them uniquely, and save to 'tmp-changed-dirs.txt'.
 if [ -s tmp-changed-files.txt ]; then
-  cat tmp-changed-files.txt | xargs dirname | sort -u > tmp-changed-dirs.txt
+  xargs -r -n1 dirname < tmp-changed-files.txt | sort -u > tmp-changed-dirs.txt
 fi
 
 touch tmp-changed-kustomization-dirs.txt
