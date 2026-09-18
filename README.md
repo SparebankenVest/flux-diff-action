@@ -51,7 +51,7 @@ If the comments are not provided the action will skip the diffing in this folder
 
 - **path-filter**: Comma separated string of paths that you want to do flux diff against. Supports glob patterns with wildcard characters (`*` and `**`). E.g. `/some/path/*` or `**/other-path/*` or `/some/path/*,**/other-path/*`. Defaults to `.`
 - **autodetect-ingore-tenants**: Flag to enable autodetection of tenants to ignore. Either "true" or "false". Useful when new tenants are applied to the repo, and you dont want the action to fail. It will look for new sync.yaml files in /tenant folder and assumes the sync.yaml contains a `kind: Kustomization` object. The name of that object is used as tenant name.
-- **additional-ignore-tenants**: Comma separated string of Flux tenants that you want to ignore. Useful if the tenant do not allready exist in the cluster and you do not want the action to fail.
+- **additional-ignore-tenants**: Comma separated string of Flux tenants that you want to ignore. Useful if the tenant do not allready exist in the cluster and you do not want the action to fail. The legacy misspelled `additional-ingore-tenants` input remains supported for backwards compatibility.
 
 ## Outputs
 

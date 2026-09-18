@@ -70,7 +70,7 @@ fi
 # Git permits whitespace in filenames, so preserve NUL delimiters while extracting
 # and deduplicating the directories.
 if [ -s tmp-changed-files.txt ]; then
-  xargs -r -0 -n1 dirname -- < tmp-changed-files.txt | sort -zu > tmp-changed-dirs.txt
+  xargs -r -0 -n1 dirname -z -- < tmp-changed-files.txt | sort -zu > tmp-changed-dirs.txt
 fi
 
 : > tmp-changed-kustomization-dirs.txt

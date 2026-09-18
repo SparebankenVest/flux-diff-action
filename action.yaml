@@ -15,8 +15,14 @@ inputs:
       The name of that object is used as tenant name.
     required: false
     default: "true"
-  additional-ingore-tenants:
+  additional-ignore-tenants:
     description: "Flux tenants to ignore in the flux diff. Comma separated string. E.g. 'tenant1,tenant2'"
+    required: false
+    default: ""
+  additional-ingore-tenants:
+    description: >-
+      Deprecated alias for additional-ignore-tenants. Flux tenants to ignore in
+      the flux diff, as a comma-separated string.
     required: false
     default: ""
 outputs:
@@ -45,7 +51,7 @@ runs:
       env:
         PATH_FILTER: ${{ inputs.path-filter }}
         AUTODETECT_IGNORE_TENANTS: ${{ inputs.autodetect-ignore-tenants }}
-        IGNORE_TENANTS: ${{ inputs.additional-ignore-tenants }}
+        IGNORE_TENANTS: ${{ inputs.additional-ignore-tenants || inputs.additional-ingore-tenants }}
     - name: Set diff output as action output
       shell: bash
       id: set-output
