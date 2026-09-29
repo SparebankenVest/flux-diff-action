@@ -103,6 +103,22 @@ exposing the secret material itself.
   Secret from the cluster in memory to compute the diff, so the identity running
   the action still needs read access to secrets in Kubernetes RBAC (`list`).
 
+**Genuine-failure text gets an additional, separate scrub:** when `flux diff`
+itself fails (e.g. connection/TLS errors, non-RBAC `Forbidden`/admission-webhook
+errors), that raw error text is surfaced into the PR comment so failures are
+diagnosable — but it is not shaped like a Kubernetes manifest, so the
+`data:`/`stringData:` block redaction above does not apply to it. A second,
+pattern-based scrub is applied to this failure text specifically:
+- JWT-shaped bearer tokens (`eyJ...`) are replaced with `<redacted-jwt>`.
+- RFC1918 private/internal IP addresses (`10.x.x.x`, `172.16-31.x.x`,
+  `192.168.x.x`) are replaced with `<redacted-ip>`.
+
+This is a **best-effort regex scrub, not an exhaustive parser**. It does not
+attempt to identify every possible secret shape or internal hostname/resource
+name. Operators should be aware that genuine failure text may still contain
+non-secret internal details (e.g. resource names, namespaces) that are not
+covered by this pattern matching.
+
 ## Example (AZURE OIDC)
 
 Here is an example of how to use this action in a workflow and comment the output back in the PR.
@@ -154,7 +170,10 @@ jobs:
           additional-ignore-tenants: "some-tenant1,other-tenant"
         id: flux-diff
       - name: Show flux diff in PR
-        if: github.event_name == 'pull_request'
+        # if: always() ensures this still runs (and the PR comment is
+        # populated with the captured flux error) when the flux-diff step
+        # fails on a genuine error, not just when it succeeds.
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
