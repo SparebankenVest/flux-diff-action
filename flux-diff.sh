@@ -2,7 +2,7 @@
 
 # Make a test to check if yq, git, flux, dirname, xargs are installed
 
-trap 'rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt tmp-flux-diff-redacted.txt tmp-sync-files.txt' EXIT
+trap 'rm -f tmp-changed-files.txt tmp-changed-dirs.txt tmp-changed-kustomization-dirs.txt tmp-flux-diff.txt tmp-flux-diff-redacted.txt tmp-flux-diff-scrubbed.txt tmp-sync-files.txt' EXIT
 
 # Check if yq is installed
 if ! command -v yq &> /dev/null; then
@@ -137,7 +137,13 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
         # Behaviour: once inside a `data:`/`stringData:` block, every more-indented
         # `key: value` line has its value replaced with `<redacted>`. The block
         # ends when a line returns to the indentation of the `data:` key or less.
-        awk '
+        #
+        # Fail-closed: if this redaction pass itself errors out for any reason,
+        # `&&` below would otherwise short-circuit and let the ORIGINAL,
+        # unredacted content silently fall through to a public PR comment. We
+        # explicitly check the exit status and replace the content with a safe
+        # placeholder on failure instead of ever printing unscrubbed output.
+        if awk '
           {
             line = $0
             # Strip a leading diff marker (space/+/-) for indentation analysis.
@@ -170,7 +176,113 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
             }
             print line
           }
-        ' tmp-flux-diff.txt > tmp-flux-diff-redacted.txt && mv tmp-flux-diff-redacted.txt tmp-flux-diff.txt
+        ' tmp-flux-diff.txt > tmp-flux-diff-redacted.txt; then
+          mv tmp-flux-diff-redacted.txt tmp-flux-diff.txt
+        else
+          echo "::warning::Secret redaction pass failed, suppressing raw output for safety" >&2
+          echo "[Output suppressed: redaction step failed]" > tmp-flux-diff.txt
+        fi
+
+        # Scrub JWT-shaped bearer tokens and RFC1918 private/internal IP
+        # addresses that may appear inline anywhere in the output (e.g. API
+        # server URLs, "dial tcp" connection errors). This runs universally
+        # over the whole file — not just inside data:/stringData: blocks —
+        # because this content is genuine, unstructured error prose (TLS/
+        # connection errors, admission-webhook bodies, etc.) that does not
+        # match the YAML-shaped Secret redaction above, and it flows into a
+        # PUBLIC PR comment on the genuine-failure branch below. This is a
+        # best-effort pattern scrub, not a full parser — it does not attempt
+        # to catch every possible secret shape or internal hostname.
+        #
+        # Implementation note: an earlier version of this scrub used sed with
+        # a hand-rolled boundary emulation
+        # (`([^0-9.]|^)PATTERN([^0-9.]|$)`). Because sed's global /g
+        # substitution scans non-overlapping matches, the trailing boundary
+        # character of one match was CONSUMED as part of the substitution, so
+        # a second IP separated from the first by only a single delimiter
+        # character (e.g. "tried 10.0.1.5:443, then 10.0.1.6:443") had no
+        # leading boundary character left to anchor on and silently bypassed
+        # redaction. awk's match()/substr() give us real non-consuming
+        # boundary checks: we scan for each pattern, and only when found we
+        # inspect (without consuming) the single character immediately before
+        # and after the match to confirm it isn't itself part of a longer
+        # digit/dot run, then advance past the match. If the boundary check
+        # fails, we advance by one character (not by the match length) so
+        # overlapping candidate positions are still considered.
+        #
+        # Fail-closed: same rationale as the Secret redaction above — check
+        # the exit status explicitly and never let unscrubbed content fall
+        # through to a public PR comment.
+        if awk '
+          # IP boundary: a digit immediately adjacent is always ambiguous
+          # (part of a longer number). A literal "." immediately adjacent is
+          # ONLY ambiguous if the character one further past it is also a
+          # digit (genuine octet-continuation ambiguity, e.g. distinguishing
+          # "10.0.0.5" in "10.0.0.5.6" from ordinary sentence-ending
+          # punctuation in "10.0.0.5."). c2 is the character one position
+          # further away from the match than c; it is only consulted when
+          # c is ".".
+          function is_ip_boundary(c, c2) {
+            if (c == "") return 1
+            if (c ~ /[0-9]/) return 0
+            if (c == ".") return (c2 !~ /[0-9]/)
+            return 1
+          }
+          # JWT boundary: anything that is not part of the base64url-ish
+          # token alphabet counts as a valid boundary. Unlike IPs, JWTs have
+          # no legitimate reason to be followed/preceded by a "." outside
+          # the token itself (the pattern already matches the dot-separated
+          # segments), so a bare not-alnum/underscore/hyphen check is
+          # correct here and does not need the IP-specific lookahead.
+          function is_jwt_boundary(c, c2) {
+            if (c == "") return 1
+            return (c !~ /[A-Za-z0-9_-]/)
+          }
+          function redact(line, pattern, placeholder, mode,    out, remaining, mstart, mlen, before, before2, after, after2, ok_before, ok_after) {
+            out = ""
+            remaining = line
+            while (match(remaining, pattern)) {
+              mstart = RSTART
+              mlen = RLENGTH
+              before = (mstart > 1) ? substr(remaining, mstart - 1, 1) : ""
+              before2 = (mstart > 2) ? substr(remaining, mstart - 2, 1) : ""
+              after = substr(remaining, mstart + mlen, 1)
+              after2 = substr(remaining, mstart + mlen + 1, 1)
+              if (mode == "jwt") {
+                ok_before = is_jwt_boundary(before, before2)
+                ok_after = is_jwt_boundary(after, after2)
+              } else {
+                ok_before = is_ip_boundary(before, before2)
+                ok_after = is_ip_boundary(after, after2)
+              }
+              if (ok_before && ok_after) {
+                out = out substr(remaining, 1, mstart - 1) placeholder
+                remaining = substr(remaining, mstart + mlen)
+              } else {
+                # Not a real boundary-delimited match (e.g. part of a longer
+                # number). Keep the first character literally and resume
+                # scanning from the next position, WITHOUT consuming any
+                # delimiter character a real match might need.
+                out = out substr(remaining, 1, mstart)
+                remaining = substr(remaining, mstart + 1)
+              }
+            }
+            return out remaining
+          }
+          {
+            line = $0
+            line = redact(line, "eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+", "<redacted-jwt>", "jwt")
+            line = redact(line, "10(\\.[0-9]{1,3}){3}", "<redacted-ip>", "ip")
+            line = redact(line, "172\\.(1[6-9]|2[0-9]|3[01])(\\.[0-9]{1,3}){2}", "<redacted-ip>", "ip")
+            line = redact(line, "192\\.168(\\.[0-9]{1,3}){2}", "<redacted-ip>", "ip")
+            print line
+          }
+        ' tmp-flux-diff.txt > tmp-flux-diff-scrubbed.txt; then
+          mv tmp-flux-diff-scrubbed.txt tmp-flux-diff.txt
+        else
+          echo "::warning::JWT/IP scrub pass failed, suppressing raw output for safety" >&2
+          echo "[Output suppressed: redaction step failed]" > tmp-flux-diff.txt
+        fi
 
         # Check if flux diff was successful
         case $FLUX_DIFF_RC in
@@ -261,7 +373,23 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
               continue
             fi
 
-            printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' "$dir"
+            # Surface the genuine failure. tmp-flux-diff.txt already went through
+            # both the Secret-redaction pipeline AND the JWT/IP scrub pass
+            # above (applied universally to the whole file, since this is
+            # genuine, unpredictable error prose — connection/TLS errors,
+            # non-RBAC Forbidden/admission-webhook bodies, etc. — that is not
+            # shaped like a Kubernetes manifest and would not otherwise be
+            # caught by the data:/stringData: block redaction). It is
+            # therefore safe to print in full and to append to
+            # diff-output.txt: the latter is what the "Set diff output" step
+            # in action.yaml exposes as the `diff-output` action output,
+            # which downstream workflows use to build the PR comment body.
+            # Without this, only the generic banner below was ever visible,
+            # making every genuine failure undiagnosable from CI logs or PR
+            # comments.
+            printf -- '\n---\xe2\x9c\x97 An error occurred when diffing %s. Exit 1.---\n' "$dir" | tee -a diff-output.txt
+            printf -- '\n----------flux diff output (%s)----------\n' "$dir" | tee -a diff-output.txt
+            cat tmp-flux-diff.txt | tee -a diff-output.txt
             exit 1
             ;;
         esac

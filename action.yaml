@@ -45,6 +45,13 @@ runs:
       env:
         GITHUB_ACTION_PATH: ${{ github.action_path }}
     - name: Run flux-diff.sh
+      id: run-flux-diff
+      # Genuine failures now write their captured flux output into
+      # diff-output.txt before flux-diff.sh exits 1 (see flux-diff.sh). We
+      # continue-on-error here so the "Set diff output" step below still runs
+      # and exposes that content via the `diff-output` output/PR comment,
+      # instead of the job stopping with only a generic banner in the logs.
+      continue-on-error: true
       run: |
         ${{ github.action_path }}/flux-diff.sh
       shell: bash
@@ -55,8 +62,23 @@ runs:
     - name: Set diff output as action output
       shell: bash
       id: set-output
+      if: always()
       run: |
-        DIFF_OUTPUT=$(cat diff-output.txt)
-        echo "diff-output<<EOF" >> $GITHUB_OUTPUT
+        # diff-output.txt may not exist if flux-diff.sh failed before ever
+        # creating it (e.g. a missing required tool). Fall back to a message
+        # rather than letting `cat` fail this step.
+        DIFF_OUTPUT=$(cat diff-output.txt 2>/dev/null || echo "flux-diff.sh failed before producing diff output. Check the 'Run flux-diff.sh' step logs.")
+        # Use a randomized heredoc delimiter rather than a fixed "EOF". Genuine
+        # flux-diff failure text is now unpredictable, attacker/error-controlled
+        # content; a fixed delimiter is an output-injection primitive if that
+        # content ever happens to contain a line exactly matching it.
+        delim="ghadelim_$(openssl rand -hex 8)"
+        echo "diff-output<<$delim" >> $GITHUB_OUTPUT
         echo "$DIFF_OUTPUT" >> $GITHUB_OUTPUT
-        echo "EOF" >> $GITHUB_OUTPUT
+        echo "$delim" >> $GITHUB_OUTPUT
+    - name: Fail if flux-diff.sh failed
+      shell: bash
+      if: steps.run-flux-diff.outcome == 'failure'
+      run: |
+        echo "flux-diff.sh reported a genuine error; see the 'Run flux-diff.sh' step output above and the diff-output action output for details." >&2
+        exit 1
