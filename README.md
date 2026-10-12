@@ -77,6 +77,32 @@ kustomization is an RBAC-object error. If any non-RBAC error is present, the run
 still fails, so genuine problems are never masked. Review RBAC changes as plain
 YAML in the pull request.
 
+## Azure Service Operator (ASO) identity/permission objects are not diffed
+
+The action also **skips** these 7 Azure Service Operator resource kinds:
+`ResourceGroup`, `RoleAssignment`, `UserAssignedIdentity`,
+`FederatedIdentityCredential`, `SqlRoleAssignment`, `RedisAccessPolicyAssignment`,
+and `RedisEnterpriseDatabaseAccessPolicyAssignment` — instead of diffing them,
+emitting a warning in the output rather than failing the run.
+
+**Why:** the shared `svai-flux-diff` Kubernetes ClusterRole deliberately grants
+only read-only access (`get`/`list`/`watch`, no `create`/`update`/`patch`) to
+these specific kinds. Each of these is either an access/permission-binding CRD
+(its purpose is granting a principal a permission) or an identity-federation CRD
+that could let a caller mint a new OIDC-federation trust to an arbitrary existing
+Managed Identity. Write access to any of them is a confirmed path to real Azure
+privilege escalation, since Azure Service Operator's own controller identity
+holds subscription-Owner in every tenant this org operates in. Rather than widen
+the diff identity's Kubernetes RBAC to make these dry-run checks succeed, the
+action treats ASO dry-run errors on these specific kinds as a skip — the same
+pattern already used for RBAC objects above.
+
+Same scoping rule as the RBAC-object skip: applied **only when every error**
+reported by `flux diff` for a kustomization is one of these known-by-design
+cases (RBAC objects and/or these 7 ASO kinds). If any other error is present,
+the run still fails, so genuine problems are never masked. Review changes to
+these resource types as plain YAML in the pull request.
+
 ## Secret redaction
 
 The action redacts the **values** of every `data:` and `stringData:` block in the

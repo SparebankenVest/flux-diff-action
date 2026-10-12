@@ -320,6 +320,7 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
 
             NON_RBAC_ERRORS=0
             HAS_RBAC_SKIP=0
+            HAS_ASO_SKIP=0
             case "$FLAT_DIFF" in
               *"✗ ["*)
                 # Take everything after the first "✗ [", then drop a trailing "]".
@@ -327,12 +328,21 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
                 ERROR_BLOCK=${ERROR_BLOCK%]*}
 
                 RBAC_KIND_RE='^(Role|RoleBinding|ClusterRole|ClusterRoleBinding)/'
+                # Azure Service Operator (ASO) resource kinds deliberately narrowed to
+                # read-only by PLT-4806 in the svai-flux-diff ClusterRole — write access
+                # to any of these is a confirmed Azure privilege-escalation path (ASO's
+                # own controller holds subscription-Owner in every tenant this org
+                # operates in), so a Forbidden error on these specific kinds is expected
+                # and by design, exactly like the RBAC-object case above. See PLT-4907.
+                ASO_KIND_RE='^(ResourceGroup|RoleAssignment|UserAssignedIdentity|FederatedIdentityCredential|SqlRoleAssignment|RedisAccessPolicyAssignment|RedisEnterpriseDatabaseAccessPolicyAssignment)/'
                 ERROR_ENTRIES=$(echo "$ERROR_BLOCK" | sed 's/, \([A-Z][A-Za-z]*\/\)/\n\1/g')
                 while IFS= read -r entry; do
                   # Only entry-start lines begin with "<UpperKind>/"; skip detail lines.
                   echo "$entry" | grep -Eq '^[A-Z][A-Za-z]*/' || continue
                   if echo "$entry" | grep -Eq "$RBAC_KIND_RE"; then
                     HAS_RBAC_SKIP=1
+                  elif echo "$entry" | grep -Eq "$ASO_KIND_RE"; then
+                    HAS_ASO_SKIP=1
                   else
                     NON_RBAC_ERRORS=1
                   fi
@@ -352,24 +362,31 @@ if [ -s tmp-changed-kustomization-dirs.txt ]; then
                 ;;
             esac
 
-            if [ "$NON_RBAC_ERRORS" -eq 0 ] && [ "$HAS_RBAC_SKIP" -eq 1 ]; then
-              # All ERRORS are RBAC-object errors, so we do not fail. But the same
+            if [ "$NON_RBAC_ERRORS" -eq 0 ] && { [ "$HAS_RBAC_SKIP" -eq 1 ] || [ "$HAS_ASO_SKIP" -eq 1 ]; }; then
+              # All ERRORS are known-by-design-skippable (RBAC objects and/or the 7
+              # ASO kinds narrowed by PLT-4806), so we do not fail. But the same
               # kustomization may ALSO contain real drift that flux computed and
               # printed (e.g. a HelmRelease or CronJob change) — flux still exits
-              # non-zero because of the forbidden RBAC objects, which is why we land
+              # non-zero because of the forbidden objects, which is why we land
               # here. We must therefore still surface that real drift, and only
-              # replace the RBAC error block with the "skipped" notice.
+              # replace the error block with the "skipped" notice(s) below.
               #
               # flux prints the drift first and the "✗ [ ... ]" error summary last.
-              # Print everything up to the "✗ [" line, then the skip notice.
+              # Print everything up to the "✗ [" line, then the skip notice(s).
               PRE_ERROR=$(sed '/✗ \[/,$d' tmp-flux-diff.txt)
               if [ -n "$(echo "$PRE_ERROR" | tr -d '[:space:]')" ]; then
                 # There is real drift to show.
                 printf -- '\n---\xE2\x9C\x93 Changes detected in %s---\n' "$dir" | tee -a diff-output.txt
                 echo "$PRE_ERROR" | tee -a diff-output.txt
               fi
-              printf -- '\n---\xe2\x9a\xa0 RBAC objects skipped in %s---\n' "$dir" | tee -a diff-output.txt
-              printf -- 'The flux-diff identity has no access to RBAC objects (Role/RoleBinding/ClusterRole/ClusterRoleBinding) by design. These are not diffed against the cluster; review their YAML in the PR directly.\n' | tee -a diff-output.txt
+              if [ "$HAS_RBAC_SKIP" -eq 1 ]; then
+                printf -- '\n---\xe2\x9a\xa0 RBAC objects skipped in %s---\n' "$dir" | tee -a diff-output.txt
+                printf -- 'The flux-diff identity has no access to RBAC objects (Role/RoleBinding/ClusterRole/ClusterRoleBinding) by design. These are not diffed against the cluster; review their YAML in the PR directly.\n' | tee -a diff-output.txt
+              fi
+              if [ "$HAS_ASO_SKIP" -eq 1 ]; then
+                printf -- '\n---\xe2\x9a\xa0 Azure Service Operator identity/permission objects skipped in %s---\n' "$dir" | tee -a diff-output.txt
+                printf -- 'The flux-diff identity has read-only access to these Azure Service Operator (ASO) resource types (ResourceGroup, RoleAssignment, UserAssignedIdentity, FederatedIdentityCredential, SqlRoleAssignment, RedisAccessPolicyAssignment, RedisEnterpriseDatabaseAccessPolicyAssignment) by design (PLT-4806) — write access to any of them is a confirmed Azure privilege-escalation path. These are not diffed against the cluster; review their YAML in the PR directly.\n' | tee -a diff-output.txt
+              fi
               continue
             fi
 
